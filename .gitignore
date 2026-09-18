@@ -42,4 +42,5 @@ cloudflare/.wrangler/
 nginx-ui-linux-*/
 app/.env
 server-manager
+release-dist/
 *.db
