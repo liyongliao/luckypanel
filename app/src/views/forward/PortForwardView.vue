@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import type { PortForwardRule } from '@/api/forward'
+import { onMounted, onUnmounted, ref } from 'vue'
+import forwardApi from '@/api/forward'
+
 const { message } = App.useApp()
-import forwardApi, { type PortForwardRule } from '@/api/forward'
 
 const loading = ref(false)
 const rules = ref<PortForwardRule[]>([])
@@ -24,19 +26,25 @@ const form = ref({
 })
 
 function formatBytes(bytes: number): string {
-  if (!bytes || bytes === 0) return '0 B'
+  if (!bytes || bytes === 0)
+    return '0 B'
   const k = 1024
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  return `${parseFloat((bytes / k ** i).toFixed(2))} ${sizes[i]}`
 }
 
 async function fetchRules() {
+  loading.value = true
   try {
     const res = await forwardApi.getRules()
-    rules.value = res.data || res || []
-  } catch (e: any) {
+    rules.value = res || []
+  }
+  catch (e: any) {
     console.error(e)
+  }
+  finally {
+    loading.value = false
   }
 }
 
@@ -85,14 +93,16 @@ async function handleSubmit() {
     if (isEditing.value) {
       await forwardApi.updateRule(editId.value, form.value)
       message.success('规则更新成功')
-    } else {
+    }
+    else {
       await forwardApi.createRule(form.value)
       message.success('规则创建成功')
     }
     showModal.value = false
     fetchRules()
-  } catch (e: any) {
-    message.error('保存失败: ' + (e.message || ''))
+  }
+  catch (e: any) {
+    message.error(`保存失败: ${e.message || ''}`)
   }
 }
 
@@ -101,8 +111,9 @@ async function handleToggle(record: PortForwardRule) {
     await forwardApi.toggleRule(record.id)
     message.success('状态已切换')
     fetchRules()
-  } catch (e: any) {
-    message.error('切换失败: ' + (e.message || ''))
+  }
+  catch (e: any) {
+    message.error(`切换失败: ${e.message || ''}`)
   }
 }
 
@@ -111,8 +122,9 @@ async function handleDelete(id: number) {
     await forwardApi.deleteRule(id)
     message.success('规则已删除')
     fetchRules()
-  } catch (e: any) {
-    message.error('删除失败: ' + (e.message || ''))
+  }
+  catch (e: any) {
+    message.error(`删除失败: ${e.message || ''}`)
   }
 }
 
@@ -134,7 +146,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  if (timer) clearInterval(timer)
+  if (timer)
+    clearInterval(timer)
 })
 </script>
 
@@ -143,8 +156,12 @@ onUnmounted(() => {
     <ACard title="TCP / UDP 端口转发与 NAT 中继" :bordered="false" class="shadow-sm">
       <template #extra>
         <AFlex gap="small">
-          <AButton @click="fetchRules">刷新</AButton>
-          <AButton type="primary" @click="openAddModal">+ 添加转发规则</AButton>
+          <AButton @click="fetchRules">
+            刷新
+          </AButton>
+          <AButton type="primary" @click="openAddModal">
+            + 添加转发规则
+          </AButton>
         </AFlex>
       </template>
 
@@ -159,13 +176,16 @@ onUnmounted(() => {
       <ATable
         :columns="columns"
         :data-source="rules"
+        :loading="loading"
         row-key="id"
         :pagination="{ pageSize: 10 }"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'name'">
             <span class="font-medium">{{ record.name }}</span>
-            <div class="text-xs text-gray-400">{{ record.description || '无备注' }}</div>
+            <div class="text-xs text-gray-400">
+              {{ record.description || '无备注' }}
+            </div>
           </template>
 
           <template v-else-if="column.key === 'protocol'">
@@ -183,7 +203,7 @@ onUnmounted(() => {
           </template>
 
           <template v-else-if="column.key === 'active_conns'">
-            <ATag :color="record.active_conns > 0 ? 'green' : 'default'">
+            <ATag :color="(record.active_conns || 0) > 0 ? 'green' : 'default'">
               {{ record.active_conns || 0 }}
             </ATag>
           </template>
@@ -211,12 +231,16 @@ onUnmounted(() => {
 
           <template v-else-if="column.key === 'action'">
             <AFlex gap="small">
-              <AButton type="link" size="small" @click="openEditModal(record)">编辑</AButton>
+              <AButton type="link" size="small" @click="openEditModal(record)">
+                编辑
+              </AButton>
               <APopconfirm
                 title="确定删除此转发规则吗？"
                 @confirm="handleDelete(record.id)"
               >
-                <AButton type="link" danger size="small">删除</AButton>
+                <AButton type="link" danger size="small">
+                  删除
+                </AButton>
               </APopconfirm>
             </AFlex>
           </template>
@@ -240,9 +264,15 @@ onUnmounted(() => {
         <AFlex gap="middle">
           <AFormItem label="传输协议" class="flex-1" required>
             <ASelect v-model:value="form.protocol">
-              <ASelectOption value="tcp">TCP</ASelectOption>
-              <ASelectOption value="udp">UDP</ASelectOption>
-              <ASelectOption value="both">TCP/UDP (双协议)</ASelectOption>
+              <ASelectOption value="tcp">
+                TCP
+              </ASelectOption>
+              <ASelectOption value="udp">
+                UDP
+              </ASelectOption>
+              <ASelectOption value="both">
+                TCP/UDP (双协议)
+              </ASelectOption>
             </ASelect>
           </AFormItem>
 

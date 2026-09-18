@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import type { LogSource } from '@/api/logcenter'
+import { onMounted, onUnmounted, ref } from 'vue'
+import logcenterApi from '@/api/logcenter'
+
 const { message } = App.useApp()
-import logcenterApi, { type LogSource } from '@/api/logcenter'
 
 const sources = ref<LogSource[]>([])
 const selectedSource = ref('nginx_access')
@@ -15,8 +17,9 @@ let timer: any = null
 async function fetchSources() {
   try {
     const res = await logcenterApi.getSources()
-    sources.value = res.data || res || []
-  } catch (e: any) {
+    sources.value = res || []
+  }
+  catch (e: any) {
     console.error(e)
   }
 }
@@ -25,11 +28,12 @@ async function fetchLogs() {
   loading.value = true
   try {
     const res = await logcenterApi.queryLogs(selectedSource.value, keyword.value, limit.value)
-    const data = res.data || res
-    logLines.value = data.lines || []
-  } catch (e: any) {
-    message.error('拉取日志失败: ' + (e.message || ''))
-  } finally {
+    logLines.value = res?.lines || []
+  }
+  catch (e: any) {
+    message.error(`拉取日志失败: ${e.message || ''}`)
+  }
+  finally {
     loading.value = false
   }
 }
@@ -37,7 +41,8 @@ async function fetchLogs() {
 function handleAutoRefreshChange(val: boolean) {
   if (val) {
     timer = setInterval(fetchLogs, 3000)
-  } else if (timer) {
+  }
+  else if (timer) {
     clearInterval(timer)
     timer = null
   }
@@ -49,7 +54,8 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  if (timer) clearInterval(timer)
+  if (timer)
+    clearInterval(timer)
 })
 </script>
 
@@ -78,17 +84,25 @@ onUnmounted(() => {
               placeholder="搜索包含文本..."
               style="width: 200px"
               allow-clear
-              @pressEnter="fetchLogs"
+              @press-enter="fetchLogs"
             />
           </div>
 
           <div>
             <span class="text-xs text-gray-500 mr-2">行数:</span>
             <ASelect v-model:value="limit" style="width: 90px" @change="fetchLogs">
-              <ASelectOption :value="100">100</ASelectOption>
-              <ASelectOption :value="200">200</ASelectOption>
-              <ASelectOption :value="500">500</ASelectOption>
-              <ASelectOption :value="1000">1000</ASelectOption>
+              <ASelectOption :value="100">
+                100
+              </ASelectOption>
+              <ASelectOption :value="200">
+                200
+              </ASelectOption>
+              <ASelectOption :value="500">
+                500
+              </ASelectOption>
+              <ASelectOption :value="1000">
+                1000
+              </ASelectOption>
             </ASelect>
           </div>
         </AFlex>

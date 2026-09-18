@@ -22,7 +22,7 @@ export const firewallApi = {
   getStatus: () => http.get<FirewallStatus>('/firewall/status'),
   toggleStatus: (enable: boolean) => http.post('/firewall/toggle', { enable }),
   getRules: () => http.get<FirewallRule[]>('/firewall/rules'),
-  openPort: (data: { port: string; protocol: string; source?: string; description?: string }) =>
+  openPort: (data: { port: string, protocol: string, source?: string, description?: string }) =>
     http.post<FirewallRule>('/firewall/rules', data),
   closePort: (id: number) => http.delete(`/firewall/rules/${id}`),
 }

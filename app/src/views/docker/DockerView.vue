@@ -1,12 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import type { ComposeStack, DockerContainer, DockerImage, DockerStatus } from '@/api/docker'
+import { onMounted, ref } from 'vue'
+import dockerApi from '@/api/docker'
+
 const { message } = App.useApp()
-import dockerApi, {
-  type DockerStatus,
-  type DockerContainer,
-  type DockerImage,
-  type ComposeStack,
-} from '@/api/docker'
 
 const activeTab = ref('containers')
 const status = ref<DockerStatus>({
@@ -45,11 +42,32 @@ services:
 `,
 })
 
+const containerColumns = [
+  { title: '容器名称', key: 'names', dataIndex: 'names' },
+  { title: '镜像', key: 'image', dataIndex: 'image' },
+  { title: '运行状态', key: 'state', dataIndex: 'state', width: 120 },
+  { title: '端口映射', key: 'ports', dataIndex: 'ports' },
+  { title: '操作', key: 'action', width: 220 },
+]
+
+const composeColumns = [
+  { title: '项目名称', key: 'name', dataIndex: 'name' },
+  { title: '存放路径', key: 'path', dataIndex: 'path' },
+  { title: '操作', key: 'action', width: 220 },
+]
+
+const imageColumns = [
+  { title: '镜像 ID', key: 'id', dataIndex: 'id' },
+  { title: '标签 (RepoTags)', key: 'repo_tags', dataIndex: 'repo_tags' },
+  { title: '镜像大小', key: 'size', dataIndex: 'size' },
+]
+
 async function fetchStatus() {
   try {
     const res = await dockerApi.getStatus()
-    status.value = res.data || res
-  } catch (e: any) {
+    status.value = res
+  }
+  catch (e: any) {
     console.error(e)
   }
 }
@@ -58,10 +76,12 @@ async function fetchContainers() {
   loading.value = true
   try {
     const res = await dockerApi.getContainers()
-    containers.value = (res.data && res.data.data) ? res.data.data : (res.data || [])
-  } catch (e: any) {
+    containers.value = res?.data || []
+  }
+  catch (e: any) {
     console.error(e)
-  } finally {
+  }
+  finally {
     loading.value = false
   }
 }
@@ -69,8 +89,9 @@ async function fetchContainers() {
 async function fetchImages() {
   try {
     const res = await dockerApi.getImages()
-    images.value = (res.data && res.data.data) ? res.data.data : (res.data || [])
-  } catch (e: any) {
+    images.value = res?.data || []
+  }
+  catch (e: any) {
     console.error(e)
   }
 }
@@ -78,8 +99,9 @@ async function fetchImages() {
 async function fetchCompose() {
   try {
     const res = await dockerApi.getCompose()
-    stacks.value = res.data || res || []
-  } catch (e: any) {
+    stacks.value = res || []
+  }
+  catch (e: any) {
     console.error(e)
   }
 }
@@ -91,8 +113,9 @@ async function handleAction(containerId: string, action: string) {
     message.success({ content: `容器操作 [${action}] 执行成功`, key: 'action' })
     fetchContainers()
     fetchStatus()
-  } catch (e: any) {
-    message.error({ content: '操作失败: ' + (e.message || ''), key: 'action' })
+  }
+  catch (e: any) {
+    message.error({ content: `操作失败: ${e.message || ''}`, key: 'action' })
   }
 }
 
@@ -102,9 +125,10 @@ async function openLogs(record: DockerContainer) {
   showLogsModal.value = true
   try {
     const res = await dockerApi.getLogs(record.id)
-    currentLogs.value = (res.data && res.data.logs) ? res.data.logs : (res.logs || '暂无日志输出')
-  } catch (e: any) {
-    currentLogs.value = '拉取日志失败: ' + (e.message || '')
+    currentLogs.value = res?.logs || '暂无日志输出'
+  }
+  catch (e: any) {
+    currentLogs.value = `拉取日志失败: ${e.message || ''}`
   }
 }
 
@@ -118,28 +142,32 @@ async function handleSaveCompose() {
     message.success('Compose 栈保存成功')
     showComposeModal.value = false
     fetchCompose()
-  } catch (e: any) {
-    message.error('保存失败: ' + (e.message || ''))
+  }
+  catch (e: any) {
+    message.error(`保存失败: ${e.message || ''}`)
   }
 }
 
 async function handleComposeAction(name: string, action: string) {
   try {
     message.loading({ content: `正在部署/执行 ${name} (${action})...`, key: 'compose' })
-    const res = await dockerApi.composeAction(name, action)
+    await dockerApi.composeAction(name, action)
     message.success({ content: '执行成功', key: 'compose' })
     fetchCompose()
     fetchContainers()
-  } catch (e: any) {
-    message.error({ content: '执行失败: ' + (e.message || ''), key: 'compose' })
+  }
+  catch (e: any) {
+    message.error({ content: `执行失败: ${e.message || ''}`, key: 'compose' })
   }
 }
 
 function formatSize(bytes: number) {
-  if (!bytes) return '0 B'
+  if (!bytes)
+    return '0 B'
   const mb = bytes / (1024 * 1024)
-  if (mb < 1024) return mb.toFixed(1) + ' MB'
-  return (mb / 1024).toFixed(2) + ' GB'
+  if (mb < 1024)
+    return `${mb.toFixed(1)} MB`
+  return `${(mb / 1024).toFixed(2)} GB`
 }
 
 onMounted(() => {
@@ -168,22 +196,38 @@ onMounted(() => {
           </span>
         </AFlex>
 
-        <AFlex gap="large" v-if="status.available">
+        <AFlex v-if="status.available" gap="large">
           <div class="text-center">
-            <div class="text-lg font-bold text-blue-600">{{ status.containers }}</div>
-            <div class="text-xs text-gray-400">总容器</div>
+            <div class="text-lg font-bold text-blue-600">
+              {{ status.containers }}
+            </div>
+            <div class="text-xs text-gray-400">
+              总容器
+            </div>
           </div>
           <div class="text-center">
-            <div class="text-lg font-bold text-emerald-600">{{ status.containers_running }}</div>
-            <div class="text-xs text-gray-400">运行中</div>
+            <div class="text-lg font-bold text-emerald-600">
+              {{ status.containers_running }}
+            </div>
+            <div class="text-xs text-gray-400">
+              运行中
+            </div>
           </div>
           <div class="text-center">
-            <div class="text-lg font-bold text-gray-500">{{ status.containers_stopped }}</div>
-            <div class="text-xs text-gray-400">已停止</div>
+            <div class="text-lg font-bold text-gray-500">
+              {{ status.containers_stopped }}
+            </div>
+            <div class="text-xs text-gray-400">
+              已停止
+            </div>
           </div>
           <div class="text-center">
-            <div class="text-lg font-bold text-purple-600">{{ status.images }}</div>
-            <div class="text-xs text-gray-400">本地镜像</div>
+            <div class="text-lg font-bold text-purple-600">
+              {{ status.images }}
+            </div>
+            <div class="text-xs text-gray-400">
+              本地镜像
+            </div>
           </div>
         </AFlex>
       </AFlex>
@@ -191,46 +235,43 @@ onMounted(() => {
 
     <!-- Main Tabs -->
     <ACard :bordered="false" class="shadow-sm">
-      <ATabs v-model:activeKey="activeTab">
+      <ATabs v-model:active-key="activeTab">
         <!-- Tab 1: Containers -->
         <ATabPane key="containers" tab="容器管理 (Containers)">
           <div class="flex justify-end mb-3">
-            <AButton @click="fetchContainers">刷新容器列表</AButton>
+            <AButton @click="fetchContainers">
+              刷新容器列表
+            </AButton>
           </div>
 
           <ATable
+            :columns="containerColumns"
             :data-source="containers"
             :loading="loading"
             row-key="id"
             :pagination="{ pageSize: 10 }"
           >
-            <ATableColumn title="容器名称" key="names">
-              <template #default="{ record }">
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'names'">
                 <span class="font-medium text-blue-600">
                   {{ record.names ? record.names.join(', ').replace(/^\//, '') : record.id }}
                 </span>
-                <div class="font-mono text-xs text-gray-400">ID: {{ record.id }}</div>
+                <div class="font-mono text-xs text-gray-400">
+                  ID: {{ record.id }}
+                </div>
               </template>
-            </ATableColumn>
 
-            <ATableColumn title="镜像" data-index="image" key="image" />
-
-            <ATableColumn title="运行状态" key="state" width="120">
-              <template #default="{ record }">
+              <template v-else-if="column.key === 'state'">
                 <ATag :color="record.state === 'running' ? 'green' : 'default'">
                   {{ record.state ? record.state.toUpperCase() : 'UNKNOWN' }}
                 </ATag>
               </template>
-            </ATableColumn>
 
-            <ATableColumn title="端口映射" key="ports">
-              <template #default="{ record }">
+              <template v-else-if="column.key === 'ports'">
                 <span class="font-mono text-xs">{{ record.ports ? record.ports.join(', ') : '-' }}</span>
               </template>
-            </ATableColumn>
 
-            <ATableColumn title="操作" key="action" width="220">
-              <template #default="{ record }">
+              <template v-else-if="column.key === 'action'">
                 <AFlex gap="small">
                   <AButton
                     v-if="record.state !== 'running'"
@@ -256,13 +297,17 @@ onMounted(() => {
                   >
                     重启
                   </AButton>
-                  <AButton size="small" type="link" @click="openLogs(record)">日志</AButton>
+                  <AButton size="small" type="link" @click="openLogs(record)">
+                    日志
+                  </AButton>
                   <APopconfirm title="确定删除容器？" @confirm="handleAction(record.id, 'remove')">
-                    <AButton size="small" type="link" danger>删除</AButton>
+                    <AButton size="small" type="link" danger>
+                      删除
+                    </AButton>
                   </APopconfirm>
                 </AFlex>
               </template>
-            </ATableColumn>
+            </template>
           </ATable>
         </ATabPane>
 
@@ -271,26 +316,26 @@ onMounted(() => {
           <div class="flex justify-between mb-3 items-center">
             <span class="text-sm text-gray-500">通过统一 YAML 文件对多容器进行版本化管理与一键启停</span>
             <AFlex gap="small">
-              <AButton @click="fetchCompose">刷新</AButton>
-              <AButton type="primary" @click="showComposeModal = true">+ 新建 Compose 栈</AButton>
+              <AButton @click="fetchCompose">
+                刷新
+              </AButton>
+              <AButton type="primary" @click="showComposeModal = true">
+                + 新建 Compose 栈
+              </AButton>
             </AFlex>
           </div>
 
-          <ATable :data-source="stacks" row-key="name" :pagination="{ pageSize: 10 }">
-            <ATableColumn title="项目名称" data-index="name" key="name">
-              <template #default="{ record }">
+          <ATable :columns="composeColumns" :data-source="stacks" row-key="name" :pagination="{ pageSize: 10 }">
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'name'">
                 <span class="font-semibold text-blue-600">{{ record.name }}</span>
               </template>
-            </ATableColumn>
 
-            <ATableColumn title="存放路径" data-index="path" key="path">
-              <template #default="{ record }">
+              <template v-else-if="column.key === 'path'">
                 <span class="font-mono text-xs text-gray-500">{{ record.path }}</span>
               </template>
-            </ATableColumn>
 
-            <ATableColumn title="操作" key="action" width="220">
-              <template #default="{ record }">
+              <template v-else-if="column.key === 'action'">
                 <AFlex gap="small">
                   <AButton size="small" type="primary" @click="handleComposeAction(record.name, 'up')">
                     部署 / 启动
@@ -303,34 +348,32 @@ onMounted(() => {
                   </AButton>
                 </AFlex>
               </template>
-            </ATableColumn>
+            </template>
           </ATable>
         </ATabPane>
 
         <!-- Tab 3: Images -->
         <ATabPane key="images" tab="本地镜像 (Images)">
           <div class="flex justify-end mb-3">
-            <AButton @click="fetchImages">刷新镜像列表</AButton>
+            <AButton @click="fetchImages">
+              刷新镜像列表
+            </AButton>
           </div>
 
-          <ATable :data-source="images" row-key="id" :pagination="{ pageSize: 10 }">
-            <ATableColumn title="镜像 ID" data-index="id" key="id">
-              <template #default="{ record }">
+          <ATable :columns="imageColumns" :data-source="images" row-key="id" :pagination="{ pageSize: 10 }">
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'id'">
                 <span class="font-mono text-xs">{{ record.id }}</span>
               </template>
-            </ATableColumn>
-            <ATableColumn title="标签 (RepoTags)" key="repo_tags">
-              <template #default="{ record }">
+              <template v-else-if="column.key === 'repo_tags'">
                 <span class="font-semibold text-blue-600">
                   {{ record.repo_tags ? record.repo_tags.join(', ') : '<none>' }}
                 </span>
               </template>
-            </ATableColumn>
-            <ATableColumn title="镜像大小" key="size">
-              <template #default="{ record }">
+              <template v-else-if="column.key === 'size'">
                 <span>{{ formatSize(record.size) }}</span>
               </template>
-            </ATableColumn>
+            </template>
           </ATable>
         </ATabPane>
       </ATabs>
@@ -339,7 +382,7 @@ onMounted(() => {
     <!-- Logs Modal -->
     <AModal
       v-model:open="showLogsModal"
-      :title="'容器实时日志: ' + currentContainerName"
+      :title="`容器实时日志: ${currentContainerName}`"
       width="800px"
       :footer="null"
     >

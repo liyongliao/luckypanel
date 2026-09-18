@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import type { DDNSTask, InterfaceInfo } from '@/api/ddns'
+import { onMounted, ref } from 'vue'
+import ddnsApi from '@/api/ddns'
+
 const { message } = App.useApp()
-import ddnsApi, { type DDNSTask, type InterfaceInfo } from '@/api/ddns'
 
 const loading = ref(false)
 const tasks = ref<DDNSTask[]>([])
@@ -29,10 +31,12 @@ async function fetchTasks() {
   loading.value = true
   try {
     const res = await ddnsApi.getTasks()
-    tasks.value = res.data || res || []
-  } catch (e: any) {
+    tasks.value = res || []
+  }
+  catch (e: any) {
     console.error(e)
-  } finally {
+  }
+  finally {
     loading.value = false
   }
 }
@@ -40,8 +44,9 @@ async function fetchTasks() {
 async function fetchInterfaces() {
   try {
     const res = await ddnsApi.getInterfaces()
-    interfaces.value = res.data || res || []
-  } catch (e: any) {
+    interfaces.value = res || []
+  }
+  catch (e: any) {
     console.error(e)
   }
 }
@@ -95,14 +100,16 @@ async function handleSubmit() {
     if (isEditing.value) {
       await ddnsApi.updateTask(editId.value, form.value)
       message.success('DDNS任务更新成功')
-    } else {
+    }
+    else {
       await ddnsApi.createTask(form.value)
       message.success('DDNS任务创建成功')
     }
     showModal.value = false
     fetchTasks()
-  } catch (e: any) {
-    message.error('操作失败: ' + (e.message || ''))
+  }
+  catch (e: any) {
+    message.error(`操作失败: ${e.message || ''}`)
   }
 }
 
@@ -112,8 +119,9 @@ async function handleRunNow(id: number) {
     await ddnsApi.runTaskNow(id)
     message.success({ content: '解析记录同步完成', key: 'sync' })
     fetchTasks()
-  } catch (e: any) {
-    message.error({ content: '同步失败: ' + (e.message || ''), key: 'sync' })
+  }
+  catch (e: any) {
+    message.error({ content: `同步失败: ${e.message || ''}`, key: 'sync' })
   }
 }
 
@@ -122,8 +130,9 @@ async function handleDelete(id: number) {
     await ddnsApi.deleteTask(id)
     message.success('任务已删除')
     fetchTasks()
-  } catch (e: any) {
-    message.error('删除失败: ' + (e.message || ''))
+  }
+  catch (e: any) {
+    message.error(`删除失败: ${e.message || ''}`)
   }
 }
 
@@ -149,8 +158,12 @@ onMounted(() => {
     <ACard title="动态域名解析 (DDNS)" :bordered="false" class="shadow-sm">
       <template #extra>
         <AFlex gap="small">
-          <AButton @click="fetchTasks">刷新</AButton>
-          <AButton type="primary" @click="openAddModal">+ 添加 DDNS 任务</AButton>
+          <AButton @click="fetchTasks">
+            刷新
+          </AButton>
+          <AButton type="primary" @click="openAddModal">
+            + 添加 DDNS 任务
+          </AButton>
         </AFlex>
       </template>
 
@@ -171,16 +184,22 @@ onMounted(() => {
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'provider'">
-            <ATag color="blue">{{ record.provider.toUpperCase() }}</ATag>
+            <ATag color="blue">
+              {{ record.provider.toUpperCase() }}
+            </ATag>
           </template>
 
           <template v-else-if="column.key === 'domains'">
-            <div class="font-mono text-blue-600 font-semibold">{{ record.domains }}</div>
+            <div class="font-mono text-blue-600 font-semibold">
+              {{ record.domains }}
+            </div>
           </template>
 
           <template v-else-if="column.key === 'method'">
             <div>
-              <ATag color="cyan">{{ record.ip_type.toUpperCase() }}</ATag>
+              <ATag color="cyan">
+                {{ record.ip_type.toUpperCase() }}
+              </ATag>
               <span class="text-xs text-gray-500">{{ record.ip_method }}</span>
             </div>
           </template>
@@ -208,10 +227,16 @@ onMounted(() => {
 
           <template v-else-if="column.key === 'action'">
             <AFlex gap="small">
-              <AButton type="link" size="small" @click="handleRunNow(record.id)">立即同步</AButton>
-              <AButton type="link" size="small" @click="openEditModal(record)">编辑</AButton>
+              <AButton type="link" size="small" @click="handleRunNow(record.id)">
+                立即同步
+              </AButton>
+              <AButton type="link" size="small" @click="openEditModal(record)">
+                编辑
+              </AButton>
               <APopconfirm title="确认删除此任务？" @confirm="handleDelete(record.id)">
-                <AButton type="link" danger size="small">删除</AButton>
+                <AButton type="link" danger size="small">
+                  删除
+                </AButton>
               </APopconfirm>
             </AFlex>
           </template>
@@ -235,18 +260,32 @@ onMounted(() => {
         <AFlex gap="middle">
           <AFormItem label="DNS 服务商" class="flex-1" required>
             <ASelect v-model:value="form.provider">
-              <ASelectOption value="cloudflare">Cloudflare</ASelectOption>
-              <ASelectOption value="aliyun">阿里云 (AliDNS)</ASelectOption>
-              <ASelectOption value="tencent">腾讯云 (DNSPod)</ASelectOption>
-              <ASelectOption value="huawei">华为云</ASelectOption>
-              <ASelectOption value="callback">自定义 Webhook</ASelectOption>
+              <ASelectOption value="cloudflare">
+                Cloudflare
+              </ASelectOption>
+              <ASelectOption value="aliyun">
+                阿里云 (AliDNS)
+              </ASelectOption>
+              <ASelectOption value="tencent">
+                腾讯云 (DNSPod)
+              </ASelectOption>
+              <ASelectOption value="huawei">
+                华为云
+              </ASelectOption>
+              <ASelectOption value="callback">
+                自定义 Webhook
+              </ASelectOption>
             </ASelect>
           </AFormItem>
 
           <AFormItem label="IP 类型" class="flex-1" required>
             <ASelect v-model:value="form.ip_type">
-              <ASelectOption value="ipv4">IPv4 (A 记录)</ASelectOption>
-              <ASelectOption value="ipv6">IPv6 (AAAA 记录)</ASelectOption>
+              <ASelectOption value="ipv4">
+                IPv4 (A 记录)
+              </ASelectOption>
+              <ASelectOption value="ipv6">
+                IPv6 (AAAA 记录)
+              </ASelectOption>
             </ASelect>
           </AFormItem>
         </AFlex>
@@ -258,8 +297,12 @@ onMounted(() => {
         <AFlex gap="middle">
           <AFormItem label="IP 探测方式" class="flex-1" required>
             <ASelect v-model:value="form.ip_method">
-              <ASelectOption value="url">公网探针 API</ASelectOption>
-              <ASelectOption value="nic">本地网卡直读</ASelectOption>
+              <ASelectOption value="url">
+                公网探针 API
+              </ASelectOption>
+              <ASelectOption value="nic">
+                本地网卡直读
+              </ASelectOption>
             </ASelect>
           </AFormItem>
 

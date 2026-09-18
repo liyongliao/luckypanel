@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import type { FirewallRule, FirewallStatus } from '@/api/firewall'
+import { onMounted, ref } from 'vue'
+import firewallApi from '@/api/firewall'
+
 const { message } = App.useApp()
-import firewallApi, { type FirewallRule, type FirewallStatus } from '@/api/firewall'
 
 const loading = ref(false)
 const status = ref<FirewallStatus>({
@@ -23,8 +25,9 @@ const form = ref({
 async function fetchStatus() {
   try {
     const res = await firewallApi.getStatus()
-    status.value = res.data || res
-  } catch (e: any) {
+    status.value = res
+  }
+  catch (e: any) {
     console.error(e)
   }
 }
@@ -33,10 +36,12 @@ async function fetchRules() {
   loading.value = true
   try {
     const res = await firewallApi.getRules()
-    rules.value = res.data || res || []
-  } catch (e: any) {
-    message.error('获取规则失败: ' + (e.message || '网络错误'))
-  } finally {
+    rules.value = res || []
+  }
+  catch (e: any) {
+    message.error(`获取规则失败: ${e.message || '网络错误'}`)
+  }
+  finally {
     loading.value = false
   }
 }
@@ -46,8 +51,9 @@ async function handleToggleStatus(checked: boolean) {
     await firewallApi.toggleStatus(checked)
     message.success(checked ? '防火墙已启用' : '防火墙已停用')
     await fetchStatus()
-  } catch (e: any) {
-    message.error('切换防火墙状态失败: ' + (e.message || ''))
+  }
+  catch (e: any) {
+    message.error(`切换防火墙状态失败: ${e.message || ''}`)
   }
 }
 
@@ -62,8 +68,9 @@ async function handleOpenPort() {
     showModal.value = false
     form.value = { port: '', protocol: 'tcp', source: 'any', description: '' }
     fetchRules()
-  } catch (e: any) {
-    message.error('操作失败: ' + (e.message || ''))
+  }
+  catch (e: any) {
+    message.error(`操作失败: ${e.message || ''}`)
   }
 }
 
@@ -72,8 +79,9 @@ async function handleClosePort(id: number) {
     await firewallApi.closePort(id)
     message.success('端口规则已移除并关闭')
     fetchRules()
-  } catch (e: any) {
-    message.error('关闭失败: ' + (e.message || ''))
+  }
+  catch (e: any) {
+    message.error(`关闭失败: ${e.message || ''}`)
   }
 }
 
@@ -100,15 +108,21 @@ onMounted(() => {
     <ACard title="系统防火墙状态" :bordered="false" class="shadow-sm">
       <template #extra>
         <AFlex gap="small" align="center">
-          <AButton @click="() => { fetchStatus(); fetchRules(); }">刷新</AButton>
-          <AButton type="primary" @click="showModal = true">+ 开放端口</AButton>
+          <AButton @click="() => { fetchStatus(); fetchRules(); }">
+            刷新
+          </AButton>
+          <AButton type="primary" @click="showModal = true">
+            + 开放端口
+          </AButton>
         </AFlex>
       </template>
 
       <AFlex align="center" gap="middle" wrap="wrap">
         <div>
           <span class="text-gray-500 mr-2">底层组件:</span>
-          <ATag color="blue">{{ status.type ? status.type.toUpperCase() : 'NONE' }}</ATag>
+          <ATag color="blue">
+            {{ status.type ? status.type.toUpperCase() : 'NONE' }}
+          </ATag>
         </div>
         <div>
           <span class="text-gray-500 mr-2">运行状态:</span>
@@ -154,7 +168,9 @@ onMounted(() => {
           </template>
 
           <template v-else-if="column.key === 'strategy'">
-            <ATag color="green">ALLOW</ATag>
+            <ATag color="green">
+              ALLOW
+            </ATag>
           </template>
 
           <template v-else-if="column.key === 'source'">
@@ -174,7 +190,9 @@ onMounted(() => {
               cancel-text="取消"
               @confirm="handleClosePort(record.id)"
             >
-              <AButton danger size="small" type="link">关闭端口</AButton>
+              <AButton danger size="small" type="link">
+                关闭端口
+              </AButton>
             </APopconfirm>
           </template>
         </template>
@@ -196,9 +214,15 @@ onMounted(() => {
 
         <AFormItem label="传输协议" required>
           <ASelect v-model:value="form.protocol">
-            <ASelectOption value="tcp">TCP</ASelectOption>
-            <ASelectOption value="udp">UDP</ASelectOption>
-            <ASelectOption value="both">TCP/UDP (双协议)</ASelectOption>
+            <ASelectOption value="tcp">
+              TCP
+            </ASelectOption>
+            <ASelectOption value="udp">
+              UDP
+            </ASelectOption>
+            <ASelectOption value="both">
+              TCP/UDP (双协议)
+            </ASelectOption>
           </ASelect>
         </AFormItem>
 
