@@ -1,0 +1,64 @@
+package notification
+
+import (
+	"context"
+	"time"
+
+	"github.com/0xJacky/Nginx-UI/model"
+)
+
+func Info(title string, content string, details any) {
+	push(model.NotificationInfo, title, content, details)
+}
+
+func Error(title string, content string, details any) {
+	push(model.NotificationError, title, content, details)
+}
+
+func Warning(title string, content string, details any) {
+	push(model.NotificationWarning, title, content, details)
+}
+
+func Success(title string, content string, details any) {
+	push(model.NotificationSuccess, title, content, details)
+}
+
+func WarningTo(title string, content string, details any, externalNotifyIDs []uint64) {
+	pushTo(model.NotificationWarning, title, content, details, externalNotifyIDs)
+}
+
+func SuccessTo(title string, content string, details any, externalNotifyIDs []uint64) {
+	pushTo(model.NotificationSuccess, title, content, details, externalNotifyIDs)
+}
+
+func Define(title string, content string, details any) *model.Notification {
+	return &model.Notification{
+		Type:    model.NotificationInfo,
+		Title:   title,
+		Content: content,
+		Details: details,
+	}
+}
+
+// SendTestMessage sends a test message with direct parameters
+func SendTestMessage(notifyType, language string, config map[string]string) error {
+	return SendTestMessageContext(context.Background(), notifyType, language, config)
+}
+
+// SendTestMessageContext sends a test message while honoring cancellation and deadlines.
+func SendTestMessageContext(ctx context.Context, notifyType, language string, config map[string]string) error {
+	timestamp := time.Now().Format(time.DateTime)
+
+	data := Define("External Notification Test", "This is a test message sent at %{timestamp} from Nginx UI.", map[string]any{
+		"timestamp": timestamp,
+	})
+	data.URL = toAbsoluteNotificationURL("#/preference")
+
+	// Create external message and send with direct parameters
+	extNotify := &ExternalMessage{data}
+	err := extNotify.SendWithConfigContext(ctx, notifyType, language, config)
+	if err != nil {
+		return err
+	}
+	return nil
+}

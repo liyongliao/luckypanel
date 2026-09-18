@@ -1,0 +1,539 @@
+<script setup lang="ts">
+import type { CPUInfoStat, DiskStat, HostInfoStat, LoadStat, MemStat } from '@/api/analytic'
+import type { Series } from '@/components/Chart/types'
+import analytic from '@/api/analytic'
+import AreaChart from '@/components/Chart/AreaChart.vue'
+import RadialBarChart from '@/components/Chart/RadialBarChart.vue'
+import { bytesToSize } from '@/lib/helper'
+import { useWebSocket } from '@/lib/websocket'
+import { useSettingsStore } from '@/pinia'
+
+const settings = useSettingsStore()
+
+const { language } = storeToRefs(settings)
+
+let isUnmounted = false
+
+const websocket = useWebSocket(analytic.serverWebSocketUrl, true, {
+  immediate: false,
+  onConnected: resetNetworkRateSample,
+  onDisconnected: resetNetworkRateSample,
+  onMessage: (_websocket, event) => {
+    if (!isUnmounted) {
+      wsOnMessage(event)
+    }
+  },
+})
+
+const rerender = ref(0)
+
+watch(language, () => {
+  rerender.value += 1
+})
+
+const host: HostInfoStat = reactive({
+  platform: '',
+  platformVersion: '',
+  os: '',
+  kernelVersion: '',
+  kernelArch: '',
+}) as HostInfoStat
+
+const cpu = ref('0.0')
+const cpu_info = reactive([]) as CPUInfoStat[]
+const cpu_analytic_series = reactive([{ name: 'User', data: [] }, { name: 'Total', data: [] }]) as Series[]
+
+const net_analytic = reactive([{ name: $gettext('Receive'), data: [] }, { name: $gettext('Send'), data: [] }]) as Series[]
+
+const disk_io_analytic = reactive([{ name: $gettext('Writes'), data: [] }, { name: $gettext('Reads'), data: [] }]) as Series[]
+
+const memory = reactive({
+  total: '',
+  used: '',
+  cached: '',
+  free: '',
+  swap_used: '',
+  swap_cached: '',
+  swap_percent: 0,
+  swap_total: '',
+  pressure: 0,
+}) as MemStat
+
+const disk = reactive({ percentage: 0, used: '', total: '', writes: { x: '', y: 0 }, reads: { x: '', y: 0 } }) as DiskStat
+const disk_io = reactive({ writes: 0, reads: 0 })
+const uptime = ref('')
+const loadavg = reactive({ load1: 0, load5: 0, load15: 0 }) as LoadStat
+const net = reactive({ recv: 0, sent: 0, last_recv: 0, last_sent: 0 })
+const ipAddresses = ref<string[]>([])
+
+interface NetworkSample {
+  bytesRecv: number
+  bytesSent: number
+  sampledAt: number
+}
+
+let lastNetworkSample: NetworkSample | undefined
+
+function resetNetworkRateSample() {
+  lastNetworkSample = undefined
+  net.recv = 0
+  net.sent = 0
+}
+
+function updateNetworkRate(network: { bytesRecv: number, bytesSent: number }, sampledAt: number) {
+  const previous = lastNetworkSample
+  const hasValidPreviousSample = previous
+    && sampledAt > previous.sampledAt
+    && network.bytesRecv >= previous.bytesRecv
+    && network.bytesSent >= previous.bytesSent
+
+  if (hasValidPreviousSample) {
+    const elapsedSeconds = (sampledAt - previous.sampledAt) / 1000
+    net.recv = (network.bytesRecv - previous.bytesRecv) / elapsedSeconds
+    net.sent = (network.bytesSent - previous.bytesSent) / elapsedSeconds
+  }
+  else {
+    net.recv = 0
+    net.sent = 0
+  }
+
+  net.last_recv = network.bytesRecv
+  net.last_sent = network.bytesSent
+  lastNetworkSample = {
+    bytesRecv: network.bytesRecv,
+    bytesSent: network.bytesSent,
+    sampledAt,
+  }
+
+  return Boolean(hasValidPreviousSample)
+}
+
+function net_formatter(bytes: number) {
+  return `${bytesToSize(bytes)}/s`
+}
+
+function cpu_formatter(usage: number) {
+  return usage.toFixed(2)
+}
+
+onMounted(async () => {
+  const r = await analytic.init()
+
+  if (isUnmounted) {
+    return
+  }
+
+  Object.assign(host, r.host)
+  Object.assign(cpu_info, r.cpu.info)
+  Object.assign(memory, r.memory)
+  Object.assign(disk, r.disk)
+  ipAddresses.value = r.ip_addresses ?? []
+
+  // uptime
+  handle_uptime(r.host?.uptime)
+
+  // load_avg
+  Object.assign(loadavg, r.loadavg)
+
+  net.last_recv = r.network.init.bytesRecv
+  net.last_sent = r.network.init.bytesSent
+
+  cpu_analytic_series[0].data = [...cpu_analytic_series[0].data, ...r.cpu.user]
+  cpu_analytic_series[1].data = [...cpu_analytic_series[1].data, ...r.cpu.total]
+  net_analytic[0].data = [...net_analytic[0].data, ...r.network.bytesRecv]
+  net_analytic[1].data = [...net_analytic[1].data, ...r.network.bytesSent]
+  disk_io_analytic[0].data = [...disk_io_analytic[0].data, ...r.disk_io.writes]
+  disk_io_analytic[1].data = [...disk_io_analytic[1].data, ...r.disk_io.reads]
+
+  websocket.open()
+})
+
+onBeforeUnmount(() => {
+  isUnmounted = true
+  websocket.close()
+})
+
+function handle_uptime(t: number) {
+  // uptime
+  let _uptime = Math.floor(t)
+  const uptime_days = Math.floor(_uptime / 86400)
+
+  _uptime -= uptime_days * 86400
+
+  const uptime_hours = Math.floor(_uptime / 3600)
+
+  _uptime -= uptime_hours * 3600
+  uptime.value = `${uptime_days}d ${uptime_hours}h ${Math.floor(_uptime / 60)}m`
+}
+
+function wsOnMessage(m: MessageEvent) {
+  const r = JSON.parse(m.data)
+
+  const cpu_usage = Math.min(r.cpu.system + r.cpu.user, 100)
+
+  cpu.value = cpu_usage.toFixed(2)
+
+  const sampledAt = Number.isFinite(r.sampled_at) ? r.sampled_at : Date.now()
+  const time = new Date(sampledAt).toISOString()
+
+  cpu_analytic_series[0].data.push({ x: time, y: Number(r.cpu.user.toFixed(2)) })
+  cpu_analytic_series[1].data.push({ x: time, y: cpu_usage })
+
+  if (cpu_analytic_series[0].data.length > 100) {
+    cpu_analytic_series[0].data.shift()
+    cpu_analytic_series[1].data.shift()
+  }
+
+  // mem
+  Object.assign(memory, r.memory)
+
+  // disk
+  Object.assign(disk, r.disk)
+  disk_io.writes = r.disk.writes.y
+  disk_io.reads = r.disk.reads.y
+
+  // uptime
+  handle_uptime(r.uptime)
+
+  // loadavg
+  Object.assign(loadavg, r.loadavg)
+
+  // network
+  if (updateNetworkRate(r.network, sampledAt)) {
+    net_analytic[0].data.push({ x: time, y: net.recv })
+    net_analytic[1].data.push({ x: time, y: net.sent })
+
+    if (net_analytic[0].data.length > 100) {
+      net_analytic[0].data.shift()
+      net_analytic[1].data.shift()
+    }
+  }
+
+  disk_io_analytic[0].data.push(r.disk.writes)
+  disk_io_analytic[1].data.push(r.disk.reads)
+
+  if (disk_io_analytic[0].data.length > 100) {
+    disk_io_analytic[0].data.shift()
+    disk_io_analytic[1].data.shift()
+  }
+}
+</script>
+
+<template>
+  <div :key="rerender">
+    <ARow
+      :gutter="[{ xs: 0, sm: 16 }, 16]"
+      class="first-row"
+    >
+      <ACol
+        :xl="7"
+        :lg="24"
+        :md="24"
+        :xs="24"
+      >
+        <ACard
+          :title="$gettext('Server Info')"
+          variant="borderless"
+        >
+          <p>
+            {{ $gettext('Uptime:') }}
+            {{ uptime }}
+          </p>
+          <p>
+            {{ $gettext('Load Average:') }}
+            <span class="load-avg-describe"> 1min:</span>{{ loadavg?.load1?.toFixed(2) }}
+            <span class="load-avg-describe"> | 5min:</span>{{ loadavg?.load5?.toFixed(2) }}
+            <span class="load-avg-describe"> | 15min:</span>{{ loadavg?.load15?.toFixed(2) }}
+          </p>
+          <p>
+            {{ $gettext('OS:') }}
+            <span class="os-platform">{{ ` ${host.platform}` }}</span> {{ host.platformVersion }}
+            <span class="os-info">({{ host.os }} {{ host.kernelVersion }}
+              {{ host.kernelArch }})</span>
+          </p>
+          <p>
+            {{ `${$gettext('Host')}:` }}
+            {{ host.hostname || 'N/A' }}
+          </p>
+          <p>
+            {{ `${$gettext('IP Address')}:` }}
+            <span class="ip-addresses">{{ ipAddresses.length > 0 ? ipAddresses.join(', ') : 'N/A' }}</span>
+          </p>
+          <p v-if="cpu_info">
+            {{ `${$gettext('CPU:')} ` }}
+            <span class="cpu-model">{{ cpu_info[0]?.modelName || 'Core' }}</span>
+            <span class="cpu-mhz">{{
+              cpu_info[0]?.mhz > 0.01 ? `${(cpu_info[0]?.mhz / 1000).toFixed(2)}GHz` : 'Core'
+            }}</span>
+            * {{ cpu_info.length }}
+          </p>
+        </ACard>
+      </ACol>
+      <ACol
+        :xl="10"
+        :lg="16"
+        :md="24"
+        :xs="24"
+        class="chart_dashboard"
+      >
+        <ACard
+          :title="$gettext('Memory and Storage')"
+          variant="borderless"
+        >
+          <ARow :gutter="[0, 32]">
+            <ACol
+              :xs="24"
+              :sm="24"
+              :md="8"
+              :lg="8"
+            >
+              <RadialBarChart
+                :key="$gettext('Memory')"
+                :name="$gettext('Memory')"
+                :series="[memory.pressure]"
+                :center-text="memory.used"
+                :bottom-text="memory.total"
+                colors="#36a3eb"
+              />
+            </ACol>
+            <ACol
+              :xs="24"
+              :sm="24"
+              :md="8"
+              :lg="8"
+            >
+              <RadialBarChart
+                :key="$gettext('Swap')"
+                :name="$gettext('Swap')"
+                :series="[memory.swap_percent]"
+                :center-text="memory.swap_used"
+                :bottom-text="memory.swap_total"
+                colors="#ff6385"
+              />
+            </ACol>
+            <ACol
+              :xs="24"
+              :sm="24"
+              :md="8"
+              :lg="8"
+            >
+              <RadialBarChart
+                :key="$gettext('Storage')"
+                :name="$gettext('Storage')"
+                :series="[disk.percentage]"
+                :center-text="disk.used"
+                :bottom-text="disk.total"
+                colors="#87d068"
+              />
+            </ACol>
+          </ARow>
+        </ACard>
+      </ACol>
+      <ACol
+        :xl="7"
+        :lg="8"
+        :sm="24"
+        :xs="24"
+        class="chart_dashboard network-total"
+      >
+        <ACard
+          :title="$gettext('Network Statistics')"
+          variant="borderless"
+        >
+          <ARow :gutter="16">
+            <ACol :span="12">
+              <AStatistic
+                :value="bytesToSize(net.last_recv)"
+                :title="$gettext('Total Receive')"
+              />
+            </ACol>
+            <ACol :span="12">
+              <AStatistic
+                :value="bytesToSize(net.last_sent)"
+                :title="$gettext('Total Send')"
+              />
+            </ACol>
+          </ARow>
+        </ACard>
+      </ACol>
+    </ARow>
+    <ARow
+      :gutter="[{ xs: 0, sm: 16 }, 16]"
+      class="row-two"
+    >
+      <ACol
+        :xl="8"
+        :lg="24"
+        :md="24"
+        :sm="24"
+        :xs="24"
+      >
+        <ACard
+          :title="$gettext('CPU Status')"
+          variant="borderless"
+        >
+          <AStatistic
+            :value="cpu"
+            title="CPU"
+          >
+            <template #suffix>
+              <span>%</span>
+            </template>
+          </AStatistic>
+          <AreaChart
+            :series="cpu_analytic_series"
+            :y-formatter="cpu_formatter"
+            :max="100"
+          />
+        </ACard>
+      </ACol>
+      <ACol
+        :xl="8"
+        :lg="12"
+        :md="24"
+        :sm="24"
+        :xs="24"
+      >
+        <ACard
+          :title="$gettext('Network')"
+          variant="borderless"
+        >
+          <ARow :gutter="16">
+            <ACol :span="12">
+              <AStatistic
+                :value="bytesToSize(net.recv)"
+                :title="$gettext('Receive')"
+              >
+                <template #suffix>
+                  <span>/s</span>
+                </template>
+              </AStatistic>
+            </ACol>
+            <ACol :span="12">
+              <AStatistic
+                :value="bytesToSize(net.sent)"
+                :title="$gettext('Send')"
+              >
+                <template #suffix>
+                  <span>/s</span>
+                </template>
+              </AStatistic>
+            </ACol>
+          </ARow>
+          <AreaChart
+            :series="net_analytic"
+            :y-formatter="net_formatter"
+          />
+        </ACard>
+      </ACol>
+      <ACol
+        :xl="8"
+        :lg="12"
+        :md="24"
+        :sm="24"
+        :xs="24"
+      >
+        <ACard
+          :title="$gettext('Disk IO')"
+          variant="borderless"
+        >
+          <ARow :gutter="16">
+            <ACol :span="12">
+              <AStatistic
+                :value="disk_io.writes"
+                :title="$gettext('Writes')"
+              >
+                <template #suffix>
+                  <span>/s</span>
+                </template>
+              </AStatistic>
+            </ACol>
+            <ACol :span="12">
+              <AStatistic
+                :value="disk_io.reads"
+                :title="$gettext('Reads')"
+              >
+                <template #suffix>
+                  <span>/s</span>
+                </template>
+              </AStatistic>
+            </ACol>
+          </ARow>
+          <AreaChart :series="disk_io_analytic" />
+        </ACard>
+      </ACol>
+    </ARow>
+  </div>
+</template>
+
+<style lang="less" scoped>
+.first-row {
+  .ant-card {
+    // Columns already stretch to the tallest one, so let the card fill its
+    // column to keep all cards in this row flush at the bottom.
+    height: 100%;
+
+    p {
+      margin-bottom: 4px;
+    }
+  }
+
+  margin-bottom: 20px;
+}
+
+.ant-card {
+  .ant-statistic {
+    margin: 0 0 10px 10px
+  }
+
+  .chart {
+    max-width: 800px;
+    max-height: 350px;
+  }
+
+  .chart_dashboard {
+    padding: 60px;
+
+    .description {
+      width: 120px;
+      text-align: center
+    }
+  }
+
+  @media (max-width: 512px) {
+    margin: 10px 0;
+    .chart_dashboard {
+      padding: 20px;
+    }
+  }
+}
+
+.load-avg-describe {
+  margin-right: 2px;
+  @media (max-width: 1600px) and (min-width: 1200px) {
+    display: none;
+  }
+}
+
+.os-info {
+  @media (max-width: 1600px) and (min-width: 1200px) {
+    display: none;
+  }
+}
+
+.cpu-model {
+  @media (max-width: 1790px) and (min-width: 1200px) {
+    display: none;
+  }
+}
+
+.cpu-mhz {
+  @media (min-width: 1790px) or (max-width: 1200px) {
+    display: none;
+  }
+}
+
+.ip-addresses {
+  word-break: break-all;
+}
+</style>

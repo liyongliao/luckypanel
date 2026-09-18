@@ -1,0 +1,175 @@
+# Environment Variables
+
+Applicable for version v2.0.0-beta.37 and above.
+
+## App
+| Configuration Setting | Environment Variable    |
+|-----------------------|-------------------------|
+| PageSize              | NGINX_UI_APP_PAGE_SIZE  |
+| JwtSecret             | NGINX_UI_APP_JWT_SECRET |
+
+
+## Server
+| Configuration Setting | Environment Variable                  |
+|-----------------------|---------------------------------------|
+| Host                  | NGINX_UI_SERVER_HOST                  |
+| Port                  | NGINX_UI_SERVER_PORT                  |
+| RunMode               | NGINX_UI_SERVER_RUN_MODE              |
+| EnableHTTPS           | NGINX_UI_SERVER_ENABLE_HTTPS          |
+| EnableH2              | NGINX_UI_SERVER_ENABLE_H2             |
+| EnableH3              | NGINX_UI_SERVER_ENABLE_H3             |
+
+## Database
+| Configuration Setting | Environment Variable |
+|-----------------------|----------------------|
+| Name                  | NGINX_UI_DB_NAME     |
+
+## Auth
+| Configuration Setting | Environment Variable                |
+|-----------------------|-------------------------------------|
+| IPWhiteList           | NGINX_UI_AUTH_IP_WHITE_LIST         |
+| TrustedProxies        | NGINX_UI_AUTH_TRUSTED_PROXIES      |
+| BanThresholdMinutes   | NGINX_UI_AUTH_BAN_THRESHOLD_MINUTES |
+| MaxAttempts           | NGINX_UI_AUTH_MAX_ATTEMPTS          |
+| SecureSessionTimeoutMinutes | NGINX_UI_AUTH_SECURE_SESSION_TIMEOUT_MINUTES |
+
+## Casdoor
+| Configuration Setting | Environment Variable              |
+|-----------------------|-----------------------------------|
+| Endpoint              | NGINX_UI_CASDOOR_ENDPOINT         |
+| ClientId              | NGINX_UI_CASDOOR_CLIENT_ID        |
+| ClientSecret          | NGINX_UI_CASDOOR_CLIENT_SECRET    |
+| CertificatePath       | NGINX_UI_CASDOOR_CERTIFICATE_PATH |
+| Organization          | NGINX_UI_CASDOOR_ORGANIZATION     |
+| Application           | NGINX_UI_CASDOOR_APPLICATION      |
+| RedirectUri           | NGINX_UI_CASDOOR_REDIRECT_URI     |
+
+## Oidc
+| Configuration Setting | Environment Variable        |
+|-----------------------|-----------------------------|
+| Endpoint              | NGINX_UI_OIDC_ENDPOINT      |
+| ClientId              | NGINX_UI_OIDC_CLIENT_ID     |
+| ClientSecret          | NGINX_UI_OIDC_CLIENT_SECRET |
+| RedirectUri           | NGINX_UI_OIDC_REDIRECT_URI  |
+| Scopes                | NGINX_UI_OIDC_SCOPES        |
+| Identifier            | NGINX_UI_OIDC_IDENTIFIER    |
+
+## Cert
+| Configuration Setting | Environment Variable                |
+|-----------------------|-------------------------------------|
+| Email                 | NGINX_UI_CERT_EMAIL                 |
+| CADir                 | NGINX_UI_CERT_CA_DIR                |
+| RenewalInterval       | NGINX_UI_CERT_RENEWAL_INTERVAL      |
+| RecursiveNameservers  | NGINX_UI_CERT_RECURSIVE_NAMESERVERS |
+| HTTPChallengePort     | NGINX_UI_CERT_HTTP_CHALLENGE_PORT   |
+
+## Cluster
+| Configuration Setting | Environment Variable  |
+|-----------------------|-----------------------|
+| Node                  | NGINX_UI_CLUSTER_NODE |
+
+## Crypto
+| Configuration Setting | Environment Variable    |
+|-----------------------|-------------------------|
+| Secret                | NGINX_UI_CRYPTO_SECRET  |
+
+## Http
+| Configuration Setting | Environment Variable               |
+|-----------------------|------------------------------------|
+| GithubProxy           | NGINX_UI_HTTP_GITHUB_PROXY         |
+| HTTPProxy             | NGINX_UI_HTTP_HTTP_PROXY           |
+| InsecureSkipVerify    | NGINX_UI_HTTP_INSECURE_SKIP_VERIFY |
+| WebSocketTrustedOrigins | NGINX_UI_HTTP_WEBSOCKET_TRUSTED_ORIGINS |
+
+## Logrotate
+| Configuration Setting | Environment Variable        |
+|-----------------------|-----------------------------|
+| Enabled               | NGINX_UI_LOGROTATE_ENABLED  |
+| CMD                   | NGINX_UI_LOGROTATE_CMD      |
+| Interval              | NGINX_UI_LOGROTATE_INTERVAL |
+
+## Nginx
+| Configuration Setting | Environment Variable              |
+|-----------------------|-----------------------------------|
+| AccessLogPath         | NGINX_UI_NGINX_ACCESS_LOG_PATH    |
+| ErrorLogPath          | NGINX_UI_NGINX_ERROR_LOG_PATH     |
+| ConfigDir             | NGINX_UI_NGINX_CONFIG_DIR         |
+| PIDPath               | NGINX_UI_NGINX_PID_PATH           |
+| SbinPath              | NGINX_UI_NGINX_SBIN_PATH          |
+| TestConfigCmd         | NGINX_UI_NGINX_TEST_CONFIG_CMD    |
+| ReloadCmd             | NGINX_UI_NGINX_RELOAD_CMD         |
+| RestartCmd            | NGINX_UI_NGINX_RESTART_CMD        |
+| LogDirWhiteList       | NGINX_UI_NGINX_LOG_DIR_WHITE_LIST |
+| StubStatusPort        | NGINX_UI_NGINX_STUB_STATUS_PORT   |
+| ContainerName         | NGINX_UI_NGINX_CONTAINER_NAME     |
+| MaintenanceDir        | NGINX_UI_NGINX_MAINTENANCE_DIR    |
+| MaintenanceTemplate   | NGINX_UI_NGINX_MAINTENANCE_TEMPLATE |
+
+## Nginx Log
+| Configuration Setting  | Environment Variable                   |
+|------------------------|---------------------------------------|
+| IndexingEnabled | NGINX_UI_NGINX_LOG_INDEXING_ENABLED |
+| IndexPath               | NGINX_UI_NGINX_LOG_INDEX_PATH                |
+| [IndexCustomMMDB](./config-nginx-log.md#indexcustommmdb) | NGINX_UI_NGINX_LOG_INDEX_CUSTOM_MMDB |
+
+## Node
+| Configuration Setting | Environment Variable            |
+|-----------------------|---------------------------------|
+| Name                  | NGINX_UI_NODE_NAME              |
+| Secret                | NGINX_UI_NODE_SECRET            |
+| SkipInstallation      | NGINX_UI_NODE_SKIP_INSTALLATION |
+
+## OpenAI
+| Configuration Setting | Environment Variable     |
+|-----------------------|--------------------------|
+| Provider              | NGINX_UI_OPENAI_PROVIDER |
+| Model                 | NGINX_UI_OPENAI_MODEL    |
+| BaseUrl               | NGINX_UI_OPENAI_BASE_URL |
+| Proxy                 | NGINX_UI_OPENAI_PROXY    |
+| Token                 | NGINX_UI_OPENAI_TOKEN    |
+
+## Terminal
+| Configuration Setting | Environment Variable                |
+|-----------------------|-------------------------------------|
+| StartCmd              | NGINX_UI_TERMINAL_START_CMD         |
+
+## Webauthn
+
+| Configuration Setting | Environment Variable              |
+|-----------------------|-----------------------------------|
+| RPDisplayName         | NGINX_UI_WEBAUTHN_RP_DISPLAY_NAME |
+| RPID                  | NGINX_UI_WEBAUTHN_RPID            |
+| RPOrigins             | NGINX_UI_WEBAUTHN_RP_ORIGINS      |
+
+## Predefined User
+
+In skip installation mode, you can set the following environment variables to create a predefined user:
+
+- NGINX_UI_PREDEFINED_USER_NAME
+- NGINX_UI_PREDEFINED_USER_PASSWORD
+
+## Host SSH Control
+
+::: info
+These variables are used when Nginx UI controls a host-installed nginx service from a Docker container via SSH.
+:::
+
+| Variable | Description |
+|---|---|
+| `NGINX_UI_NGINX_HOST_MODE` | Set to `ssh` to enable host SSH control |
+| `NGINX_UI_NGINX_HOST_ACCESS_MODE` | `sftp` or `mounted`. Required in SSH mode: whether the container reaches the host nginx files over SFTP or through bind mounts |
+| `NGINX_UI_NGINX_HOST_KEY_SOURCE` | `generated` (default), `existing` or `provided`: where the SSH private key comes from |
+| `NGINX_UI_NGINX_HOST_ADDRESS` | Remote `host:port`, e.g. `host.docker.internal:22` |
+| `NGINX_UI_NGINX_HOST_USER` | SSH user on the host |
+| `NGINX_UI_NGINX_HOST_PRIVATE_KEY_PATH` | Private key path inside the container |
+| `NGINX_UI_NGINX_HOST_KNOWN_HOSTS_PATH` | known_hosts allow-list path inside the container |
+| `NGINX_UI_NGINX_HOST_SUDO_PREFIX` | Default `sudo -n` |
+| `NGINX_UI_NGINX_HOST_SERVICE_MANAGER` | `systemd` (default) or `launchd` |
+| `NGINX_UI_NGINX_HOST_SYSTEMD_UNIT_NAME` | Default `nginx.service` |
+| `NGINX_UI_NGINX_HOST_SYSTEMCTL_PATH` | Absolute path to systemctl on the host |
+| `NGINX_UI_NGINX_HOST_LAUNCHD_SERVICE` | launchd label. Default `homebrew.mxcl.nginx` |
+| `NGINX_UI_NGINX_HOST_LAUNCHCTL_PATH` | Absolute path to launchctl. Default `/bin/launchctl` |
+| `NGINX_UI_NGINX_HOST_CONFIG_DIR` | Host-side nginx config dir |
+| `NGINX_UI_NGINX_HOST_LOG_DIR` | Host-side nginx log dir |
+| `NGINX_UI_NGINX_SBIN_PATH` | Optional in SSH mode: the absolute path of the nginx binary on the host. When empty, Nginx UI resolves the service manager default (`/usr/sbin/nginx` for systemd, `/opt/homebrew/opt/nginx/bin/nginx` for launchd). The generated sudoers allow-list matches the resolved path exactly |
+| `NGINX_UI_DISABLE_BUNDLED_NGINX` | Set to `true` to disable the container's bundled nginx (required in SSH mode) |

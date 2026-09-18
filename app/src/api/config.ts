@@ -1,0 +1,65 @@
+import type { AxiosRequestConfig } from '@uozi-admin/request'
+import type { SyncSummary } from '@/api/cluster_sync'
+import type { GetListResponse } from '@/api/curd'
+import type { ChatComplicationMessage } from '@/api/llm'
+import { extendCurdApi, http, useCurdApi } from '@uozi-admin/request'
+
+export interface ModelBase {
+  id: number
+  created_at: string
+  updated_at: string
+}
+
+export interface Config {
+  name: string
+  content: string
+  llm_messages: ChatComplicationMessage[]
+  filepath: string
+  modified_at: string
+  sync_node_ids?: number[]
+  sync_overwrite?: false
+  dir: string
+}
+
+export interface ConfigBackup extends ModelBase {
+  name: string
+  filepath: string
+  content: string
+}
+
+const config = extendCurdApi(useCurdApi<Config>('/configs'), {
+  // eslint-disable-next-line ts/no-explicit-any
+  getItem: (id: string | number, params?: Record<string, any>, config?: AxiosRequestConfig) => {
+    return http.get<Config>('/config', { params: { path: id, ...params }, ...config })
+  },
+  // eslint-disable-next-line ts/no-explicit-any
+  updateItem: (id: string | number, data: Record<string, any>, config?: AxiosRequestConfig) => {
+    return http.post<Config>('/config', { path: decodeURIComponent(id as string), ...data }, config)
+  },
+  get_base_path: () => http.get('/config_base_path'),
+  mkdir: (basePath: string, name: string) => http.post('/config_mkdir', { base_path: basePath, folder_name: name }),
+  rename: (basePath: string, origName: string, newName: string, syncNodeIds?: number[]) => http.post('/config_rename', {
+    base_path: basePath,
+    orig_name: origName,
+    new_name: newName,
+    sync_node_ids: syncNodeIds,
+  }),
+  delete: (basePath: string, name: string, syncNodeIds?: number[]) => http.post('/config_delete', {
+    base_path: basePath,
+    name,
+    sync_node_ids: syncNodeIds,
+  }),
+  get_history: (filepath: string, params?: { page: number, page_size: number }) => {
+    return http.get<GetListResponse<ConfigBackup>>('/config_histories', { params: { filepath, ...params } })
+  },
+  /** Replicates a whole directory to the selected nodes instead of a single file. */
+  syncDirectory: (dir: string, syncNodeIds: number[], syncOverwrite: boolean) => {
+    return http.post<SyncSummary>('/config_sync_directory', {
+      dir,
+      sync_node_ids: syncNodeIds,
+      sync_overwrite: syncOverwrite,
+    })
+  },
+})
+
+export default config

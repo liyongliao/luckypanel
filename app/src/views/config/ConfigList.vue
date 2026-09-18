@@ -1,0 +1,257 @@
+<script setup lang="ts">
+import { StarFilled, StarOutlined } from '@antdv-next/icons'
+import { StdTable } from '@uozi-admin/curd'
+import config from '@/api/config'
+import FooterToolBar from '@/components/FooterToolbar'
+import InspectConfig from '@/components/InspectConfig'
+import { useBreadcrumbs } from '@/composables/useBreadcrumbs'
+import { useConfigFavorites } from '@/composables/useConfigFavorites'
+import { isProtectedPath } from '@/views/config/configUtils'
+import Delete from './components/Delete.vue'
+import Deploy from './components/Deploy.vue'
+import Mkdir from './components/Mkdir.vue'
+import Rename from './components/Rename.vue'
+import configColumns from './configColumns'
+
+const table = useTemplateRef('table')
+const route = useRoute()
+const router = useRouter()
+
+const basePath = computed(() => {
+  let dir = route?.query?.dir ?? ''
+  if (dir)
+    dir += '/'
+
+  return dir as string
+})
+
+const getParams = computed(() => {
+  return {
+    dir: basePath.value,
+  }
+})
+
+const update = ref(1)
+
+watch(getParams, () => {
+  update.value++
+})
+
+const refInspectConfig = useTemplateRef('refInspectConfig')
+const breadcrumbs = useBreadcrumbs()
+
+const { isFavorite, toggleFavorite } = useConfigFavorites()
+
+function updateBreadcrumbs() {
+  const filteredPath = basePath.value
+    .split('/')
+    .filter(v => v)
+
+  let accumulatedPath = ''
+  const path = filteredPath.map((segment, index) => {
+    const decodedSegment = decodeURIComponent(segment)
+
+    if (index === 0) {
+      accumulatedPath = segment
+    }
+    else {
+      accumulatedPath = `${accumulatedPath}/${segment}`
+    }
+
+    return {
+      name: 'Manage Configs',
+      translatedName: () => decodedSegment,
+      path: '/config',
+      query: {
+        dir: accumulatedPath,
+      },
+      hasChildren: false,
+    }
+  })
+
+  breadcrumbs.value = [{
+    name: 'Home',
+    translatedName: () => $gettext('Home'),
+    path: '/',
+    hasChildren: false,
+  }, {
+    name: 'Manage Configs',
+    translatedName: () => $gettext('Manage Configs'),
+    path: '/config',
+    hasChildren: false,
+  }, ...path]
+}
+
+onMounted(() => {
+  updateBreadcrumbs()
+})
+
+watch(route, () => {
+  refInspectConfig.value?.test()
+  updateBreadcrumbs()
+})
+
+function goBack() {
+  const pathSegments = basePath.value.split('/').slice(0, -2)
+  const encodedPath = pathSegments.length > 0 ? pathSegments.join('/') : ''
+
+  router.push({
+    path: '/config',
+    query: {
+      dir: encodedPath || undefined,
+    },
+  })
+}
+
+const refMkdir = useTemplateRef('refMkdir')
+const refRename = useTemplateRef('refRename')
+const refDelete = useTemplateRef('refDelete')
+const refDeploy = useTemplateRef('refDeploy')
+
+// Deploy needs the same encoded path the list uses to navigate into a directory.
+function openDeploy(name: string) {
+  refDeploy.value?.open(`${basePath.value}${encodeURIComponent(name)}`, name)
+}
+
+// Check if a file/directory is protected
+function isProtected(name: string) {
+  return isProtectedPath(name)
+}
+</script>
+
+<template>
+  <ACard :title="$gettext('Configurations')">
+    <template #extra>
+      <AButton
+        v-if="basePath"
+        type="link"
+        size="small"
+        @click="goBack"
+      >
+        {{ $gettext('Back') }}
+      </AButton>
+      <AButton
+        type="link"
+        size="small"
+        @click="router.push({
+          path: '/config/add',
+          query: { basePath: basePath || undefined },
+        })"
+      >
+        {{ $gettext('Create File') }}
+      </AButton>
+      <AButton
+        type="link"
+        size="small"
+        @click="() => refMkdir?.open(basePath)"
+      >
+        {{ $gettext('Create Folder') }}
+      </AButton>
+    </template>
+    <InspectConfig ref="refInspectConfig" />
+    <StdTable
+      :key="update"
+      ref="table"
+      :get-list-api="config.getList"
+      :columns="configColumns"
+      disable-delete
+      disable-view
+      row-key="name"
+      :custom-query-params="getParams"
+      disable-router-query
+      disable-edit
+      :scroll-x="880"
+    >
+      <template #beforeActions="{ record }">
+        <AButton
+          v-if="!record.is_dir"
+          type="link"
+          size="small"
+          :title="isFavorite(basePath, record.name) ? $gettext('Unfavorite') : $gettext('Favorite')"
+          @click="() => toggleFavorite(basePath, record.name)"
+        >
+          <StarFilled v-if="isFavorite(basePath, record.name)" class="favorite-on" />
+          <StarOutlined v-else />
+        </AButton>
+        <AButton
+          type="link"
+          size="small"
+          @click="() => {
+            if (!record.is_dir) {
+              router.push({
+                path: `/config/${encodeURIComponent(record.name)}/edit`,
+                query: {
+                  basePath,
+                },
+              })
+            }
+            else {
+              let encodedPath = '';
+              if (basePath) {
+                encodedPath = basePath;
+              }
+              encodedPath += encodeURIComponent(record.name);
+
+              router.push({
+                query: {
+                  dir: encodedPath,
+                },
+              })
+            }
+          }"
+        >
+          {{ $gettext('Modify') }}
+        </AButton>
+        <AButton
+          v-if="record.is_dir"
+          type="link"
+          size="small"
+          @click="() => openDeploy(record.name)"
+        >
+          {{ $gettext('Deploy') }}
+        </AButton>
+        <AButton
+          v-if="!isProtected(record.name)"
+          type="link"
+          size="small"
+          @click="() => refRename?.open(basePath, record.name, record.is_dir)"
+        >
+          {{ $gettext('Rename') }}
+        </AButton>
+        <AButton
+          v-if="!isProtected(record.name)"
+          type="link"
+          size="small"
+          danger
+          @click="() => refDelete?.open(basePath, record.name, record.is_dir)"
+        >
+          {{ $gettext('Delete') }}
+        </AButton>
+      </template>
+    </StdTable>
+    <Mkdir
+      ref="refMkdir"
+      @created="() => table?.refresh()"
+    />
+    <Rename
+      ref="refRename"
+      @renamed="() => table?.refresh()"
+    />
+    <Delete
+      ref="refDelete"
+      @deleted="() => table?.refresh()"
+    />
+    <Deploy ref="refDeploy" />
+    <FooterToolBar v-if="basePath">
+      <AButton @click="goBack">
+        {{ $gettext('Back') }}
+      </AButton>
+    </FooterToolBar>
+  </ACard>
+</template>
+
+<style scoped>
+.favorite-on {
+  color: var(--ant-color-warning);
+}
+</style>

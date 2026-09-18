@@ -1,0 +1,26 @@
+package config
+
+import (
+	"github.com/0xJacky/Nginx-UI/internal/middleware"
+	"github.com/gin-gonic/gin"
+)
+
+func InitRouter(r *gin.RouterGroup) {
+	r.GET("config_base_path", GetBasePath)
+
+	r.GET("configs", GetConfigs)
+	r.GET("config", GetConfig)
+
+	o := r.Group("", middleware.RequireSecureSession())
+	{
+		o.POST("configs", AddConfig)
+		o.POST("config", EditConfig)
+		o.POST("config_mkdir", Mkdir)
+		o.POST("config_rename", Rename)
+		o.POST("config_delete", DeleteConfig)
+		o.POST("config_sync_batch", SyncConfigBatch)
+		o.POST("config_sync_directory", SyncConfigDirectory)
+	}
+
+	r.GET("config_histories", GetConfigHistory)
+}

@@ -1,0 +1,250 @@
+<script setup lang="ts">
+import { throttle } from 'lodash'
+import { storeToRefs } from 'pinia'
+import settings from '@/api/settings'
+import PageHeader from '@/components/PageHeader'
+import { useRouteHashScroll } from '@/composables/useRouteHashScroll'
+import { useSettingsStore, useUserStore, useWebSocketEventBusStore } from '@/pinia'
+import { useNodeAvailabilityStore } from '@/pinia/moudule/nodeAvailability'
+import { useProxyAvailabilityStore } from '@/pinia/moudule/proxyAvailability'
+import FooterLayout from './FooterLayout.vue'
+import HeaderLayout from './HeaderLayout.vue'
+import SideBar from './SideBar.vue'
+
+const { handleRouteEnter } = useRouteHashScroll()
+
+const drawerVisible = ref(false)
+const collapsed = ref(false)
+const hideLayoutSidebar = ref(false)
+
+function _init() {
+  collapsed.value = collapse()
+  hideLayoutSidebar.value = getClientWidth() < 600
+}
+
+const init = throttle(_init, 50)
+
+addEventListener('resize', init)
+
+function getClientWidth() {
+  return document.body.clientWidth
+}
+
+function collapse() {
+  return getClientWidth() < 1080
+}
+
+const { server_name } = storeToRefs(useSettingsStore())
+
+settings.get_server_name().then(r => {
+  server_name.value = r.name
+})
+
+// Initialize stores monitoring after user is logged in and layout is mounted.
+// Upstream availability is not started here: the pages that render it subscribe
+// through useProxyAvailability(), so the socket only exists while it is needed.
+const proxyAvailabilityStore = useProxyAvailabilityStore()
+const nodeAvailabilityStore = useNodeAvailabilityStore()
+const websocketEventBus = useWebSocketEventBusStore()
+const userStore = useUserStore()
+
+onMounted(() => {
+  // Initialize layout
+  init()
+
+  void userStore.refreshTwoFAStatus()
+
+  // Start monitoring for node availability
+  nodeAvailabilityStore.startMonitoring()
+})
+
+onUnmounted(() => {
+  // Remove resize listener
+  removeEventListener('resize', init)
+
+  // Leaving the authenticated layout (logout) closes every session-bound
+  // socket right away instead of leaving them streaming for a session that
+  // has ended.
+  proxyAvailabilityStore.shutdownMonitoring()
+  nodeAvailabilityStore.stopMonitoring()
+  websocketEventBus.disconnect()
+})
+
+const breadList = ref([])
+
+provide('breadList', breadList)
+</script>
+
+<template>
+  <ALayout class="full-screen-wrapper min-h-screen">
+    <div class="drawer-sidebar">
+      <ADrawer
+        v-model:open="drawerVisible"
+        :closable="false"
+        placement="left"
+        :size="256"
+        @close="drawerVisible = false"
+      >
+        <SideBar />
+      </ADrawer>
+    </div>
+
+    <ALayoutSider
+      v-if="!hideLayoutSidebar"
+      v-model:collapsed="collapsed"
+      collapsible
+      :style="{ zIndex: 11 }"
+      theme="light"
+      class="layout-sider"
+    >
+      <SideBar />
+    </ALayoutSider>
+
+    <ALayout class="main-container">
+      <ALayoutHeader :style="{ position: 'sticky', top: '0', zIndex: 10, width: '100%' }">
+        <HeaderLayout @click-un-fold="drawerVisible = true" />
+      </ALayoutHeader>
+
+      <ALayoutContent>
+        <PageHeader />
+        <div class="router-view">
+          <RouterView v-slot="{ Component, route }">
+            <Transition name="slide-fade" @after-enter="handleRouteEnter">
+              <component
+                :is="Component"
+                :key="route.path"
+              />
+            </Transition>
+          </RouterView>
+        </div>
+      </ALayoutContent>
+
+      <ALayoutFooter>
+        <FooterLayout />
+      </ALayoutFooter>
+    </ALayout>
+  </ALayout>
+</template>
+
+<style lang="less" scoped>
+.layout-sider {
+  @media (max-width: 600px) {
+    display: none;
+  }
+}
+
+.drawer-sidebar {
+  @media (min-width: 600px) {
+    display: none;
+  }
+}
+</style>
+
+<style lang="less">
+// The collapse trigger is position: fixed at the bottom of the viewport, so the
+// sticky sidebar has to stop above it. Keep in sync with the Layout
+// `triggerHeight` theme token.
+@sider-trigger-height: 48px;
+
+.layout-sider .sidebar {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - @sider-trigger-height);
+
+  > .logo, > .indicator {
+    flex: none;
+  }
+
+  // Let the menu take whatever is left below the logo and the node indicator
+  // rather than subtracting a fixed offset, which hides the last entries as
+  // soon as either of them changes height. ant-menu-root also covers the
+  // collapsed menu, which renders as ant-menu-vertical.
+  > ul.ant-menu-root {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    .ant-menu-item {
+      width: unset;
+    }
+  }
+}
+</style>
+
+<style lang="less">
+.slide-fade-enter-active {
+  transition: all .3s ease-in-out;
+}
+
+.slide-fade-leave-active {
+  transition: all .3s cubic-bezier(1.0, 0.5, 0.8, 1.0);
+}
+
+.slide-fade-enter-from, .slide-fade-enter-to, .slide-fade-leave-to
+  /* .slide-fade-leave-active for below version 2.1.8 */ {
+  transform: translateX(10px);
+  opacity: 0;
+}
+
+body {
+  overflow: unset !important;
+}
+
+.ant-layout-header {
+  padding: 0 !important;
+}
+
+.ant-layout-sider {
+  &.ant-layout-sider-has-trigger {
+    padding-bottom: 0;
+  }
+
+  box-shadow: 2px 0 8px rgba(29, 35, 41, 0.05);
+}
+
+.ant-drawer-body {
+  .sidebar .logo {
+    box-shadow: 0 1px 0 0 #e8e8e8;
+  }
+
+  .ant-menu-inline, .ant-menu-vertical, .ant-menu-vertical-left {
+    border-right: 0 !important;
+  }
+}
+
+.ant-table-small {
+  font-size: 13px;
+}
+
+.header-notice-wrapper .ant-tabs-content {
+  max-height: 250px;
+}
+
+.header-notice-wrapper .ant-tabs-content-active {
+  overflow-y: scroll;
+}
+
+.ant-layout-footer {
+  @media (max-width: 320px) {
+    padding: 10px;
+  }
+}
+
+.ant-layout-content {
+  min-height: auto;
+
+  .router-view {
+    padding: 20px;
+    @media (max-width: 512px) {
+      padding: 20px 0;
+    }
+    position: relative;
+  }
+
+}
+
+.ant-layout-footer {
+  text-align: center;
+}
+</style>

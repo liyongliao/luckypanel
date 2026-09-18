@@ -1,0 +1,393 @@
+<script setup lang="ts">
+import type { TerminalSessionCallbacks } from '@/composables/useTerminalSession'
+import type { TerminalTab } from '@/pinia/moudule/terminal'
+import { theme } from 'antdv-next'
+import use2FAModal, { TwoFACancelledError } from '@/components/TwoFA/use2FAModal'
+import { useDemoTerminalSession } from '@/composables/useDemoTerminalSession'
+import { useTerminalSession } from '@/composables/useTerminalSession'
+import { useGlobalStore, useTerminalStore } from '@/pinia'
+import TerminalHeader from './components/TerminalHeader.vue'
+import TerminalRightPanel from './components/TerminalRightPanel.vue'
+import TerminalSessionContent from './components/TerminalSessionContent.vue'
+import TerminalStatusBar from './components/TerminalStatusBar.vue'
+import '@xterm/xterm/css/xterm.css'
+
+const terminalStore = useTerminalStore()
+const globalStore = useGlobalStore()
+const { open: openOtpModal } = use2FAModal()
+const liveSession = useTerminalSession()
+const demoSession = useDemoTerminalSession()
+
+// On a demo node /api/pty is refused before the WebSocket upgrade, so there is
+// nothing to attach to. Fall back to the browser-local shell instead. The flag
+// resolves asynchronously, so dispatch per call rather than destructuring once.
+const isDemoTerminal = computed(() => globalStore.isDemo)
+
+function destroySession(tabId: string) {
+  demoSession.destroySession(tabId)
+  liveSession.destroySession(tabId)
+}
+
+function focusSession(tabId: string) {
+  if (isDemoTerminal.value) {
+    demoSession.focusSession(tabId)
+    return
+  }
+  liveSession.focusSession(tabId)
+}
+
+function resizeAllSessions() {
+  if (isDemoTerminal.value) {
+    demoSession.resizeAllSessions()
+    return
+  }
+  liveSession.resizeAllSessions()
+}
+
+function getSessionConnectionStatus(tabId: string) {
+  if (isDemoTerminal.value) {
+    // The browser-local shell has no connection to lose.
+    return { lostConnection: false }
+  }
+  return liveSession.getSessionConnectionStatus(tabId)
+}
+
+// Create theme config for AConfigProvider
+const terminalTheme = computed(() => {
+  return {
+    algorithm: theme.darkAlgorithm,
+  }
+})
+
+const insecureConnection = ref(false)
+const rightPanelRef = ref<InstanceType<typeof TerminalRightPanel>>()
+
+function checkSecureConnection() {
+  const hostname = window.location.hostname
+  const protocol = window.location.protocol
+
+  if ((hostname !== 'localhost' && hostname !== '127.0.0.1') && protocol !== 'https:') {
+    insecureConnection.value = true
+  }
+}
+
+const sessionCallbacks: TerminalSessionCallbacks = {
+  onInput: (_tabId: string, data: string) => {
+    if (rightPanelRef.value && data.includes('\r')) {
+      const command = data.replace(/\r/g, '').trim()
+      if (command) {
+        rightPanelRef.value.updateCurrentCommand(command)
+      }
+    }
+  },
+  onConnectionLost: (_tabId: string) => {
+    // Connection status is now managed within the session itself
+  },
+  onConnectionReady: (_tabId: string) => {
+    // Connection status is now managed within the session itself
+  },
+}
+
+async function createNewTerminal() {
+  const tab = terminalStore.createTab()
+
+  try {
+    if (isDemoTerminal.value) {
+      // No PTY, no socket, so no secure session to establish either.
+      await nextTick()
+      demoSession.createSession(tab, getTerminalContainerId(tab.id), sessionCallbacks)
+    }
+    else {
+      const secureSessionId = await openOtpModal()
+
+      // Wait for DOM to update before creating session
+      await nextTick()
+
+      await liveSession.createSession(tab, getTerminalContainerId(tab.id), secureSessionId, sessionCallbacks)
+    }
+
+    nextTick(() => {
+      focusSession(tab.id)
+    })
+  }
+  catch (error) {
+    console.error('Failed to create terminal session:', error)
+    if (!(error instanceof TwoFACancelledError)) {
+      terminalStore.closeTab(tab.id)
+    }
+  }
+}
+
+function getTerminalContainerId(tabId: string): string {
+  return `container-${tabId}`
+}
+
+function hasSession(tabId: string) {
+  if (isDemoTerminal.value) {
+    return demoSession.hasSession(tabId)
+  }
+  return liveSession.hasSession(tabId)
+}
+
+async function ensureSession(tab: TerminalTab) {
+  if (hasSession(tab.id)) {
+    return
+  }
+
+  if (isDemoTerminal.value) {
+    await nextTick()
+    demoSession.createSession(tab, getTerminalContainerId(tab.id), sessionCallbacks)
+    return
+  }
+
+  const secureSessionId = await openOtpModal()
+  await nextTick()
+  await liveSession.createSession(tab, getTerminalContainerId(tab.id), secureSessionId, sessionCallbacks)
+}
+
+async function switchTab(tabId: string) {
+  terminalStore.setActiveTab(tabId)
+
+  await nextTick()
+
+  try {
+    const tab = terminalStore.tabs.find(item => item.id === tabId)
+    if (tab) {
+      await ensureSession(tab)
+    }
+  }
+  catch (error) {
+    console.error('Failed to switch terminal tab:', error)
+  }
+
+  focusSession(tabId)
+}
+
+function closeTab(tabId: string) {
+  destroySession(tabId)
+  terminalStore.closeTab(tabId)
+}
+
+onMounted(async () => {
+  checkSecureConnection()
+  updateWindowWidth()
+  window.addEventListener('resize', updateWindowWidth)
+
+  // Settle the demo flag before the first session, otherwise a demo node would
+  // briefly try to open the PTY socket that it is going to refuse anyway.
+  await globalStore.ensureDemoFlag()
+
+  if (!terminalStore.hasActiveTabs) {
+    await createNewTerminal()
+    return
+  }
+
+  const activeTab = terminalStore.activeTab
+  if (activeTab) {
+    try {
+      await ensureSession(activeTab)
+    }
+    catch (error) {
+      console.error('Failed to restore terminal session:', error)
+    }
+    focusSession(activeTab.id)
+  }
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateWindowWidth)
+  terminalStore.tabs.forEach(tab => {
+    destroySession(tab.id)
+  })
+})
+
+async function refreshTerminal() {
+  // Get the current active tab
+  const activeTab = terminalStore.activeTab
+  if (!activeTab)
+    return
+
+  try {
+    // Close the current session
+    destroySession(activeTab.id)
+
+    if (isDemoTerminal.value) {
+      await nextTick()
+      demoSession.createSession(activeTab, getTerminalContainerId(activeTab.id), sessionCallbacks)
+    }
+    else {
+      // Recreate the session
+      const secureSessionId = await openOtpModal()
+      await nextTick()
+
+      await liveSession.createSession(activeTab, getTerminalContainerId(activeTab.id), secureSessionId, sessionCallbacks)
+    }
+
+    nextTick(() => {
+      focusSession(activeTab.id)
+    })
+  }
+  catch (error) {
+    console.error('Failed to refresh terminal session:', error)
+  }
+}
+
+watch(() => terminalStore.activeTabId, (newTabId, oldTabId) => {
+  if (oldTabId && newTabId !== oldTabId) {
+    nextTick(() => {
+      if (newTabId) {
+        focusSession(newTabId)
+      }
+    })
+  }
+})
+
+function toggleRightPanel() {
+  terminalStore.toggle_llm_panel()
+  nextTick(() => {
+    setTimeout(() => {
+      resizeAllSessions()
+    }, 300)
+  })
+}
+
+// Track window size for responsive design
+const windowWidth = ref(0)
+
+function updateWindowWidth() {
+  windowWidth.value = window.innerWidth
+}
+
+// Dynamic height calculation for terminals container
+const terminalContainerHeight = computed(() => {
+  if (windowWidth.value <= 1024) {
+    // In mobile/tablet layout, consider LLM panel visibility
+    if (terminalStore.llm_panel_visible) {
+      // Terminal takes 60% when LLM panel is visible
+      return windowWidth.value <= 512 ? '50%' : '60%'
+    }
+    return '100%' // Full height minus header and status bar when LLM panel is hidden
+  }
+  // In desktop layout, always full height (LLM panel is on the right)
+  return '100%' // header (48px) + status bar (28px)
+})
+
+// Dynamic height calculation for terminal container
+const terminalMainContainerHeight = computed(() => {
+  if (windowWidth.value <= 1024) {
+    // In mobile/tablet layout, consider LLM panel visibility
+    if (terminalStore.llm_panel_visible) {
+      // Terminal container takes allocated percentage
+      return windowWidth.value <= 512 ? '50%' : '60%'
+    }
+    return '100%' // Full height minus header and status bar when LLM panel is hidden
+  }
+  // In desktop layout, always flex: 1
+  return 'auto'
+})
+</script>
+
+<template>
+  <div>
+    <AConfigProvider :theme="terminalTheme">
+      <AAlert
+        v-if="isDemoTerminal"
+        class="mb-6"
+        type="info"
+        show-icon
+        :title="$gettext('This is a simulated terminal running entirely in your browser. Commands are answered locally and never reach a server.')"
+      />
+      <AAlert
+        v-if="insecureConnection"
+        class="mb-6"
+        type="warning"
+        show-icon
+        :title="$gettext('You are accessing this terminal over an insecure HTTP connection on a non-localhost domain. This may expose sensitive information.')"
+      />
+      <div class="terminal-layout">
+        <div class="terminal-container" :style="{ height: terminalMainContainerHeight }">
+          <TerminalHeader
+            :tabs="terminalStore.tabs"
+            :active-tab-id="terminalStore.activeTabId"
+            :llm-panel-visible="terminalStore.llm_panel_visible"
+            @switch-tab="switchTab"
+            @close-tab="closeTab"
+            @create-new-terminal="createNewTerminal"
+            @toggle-right-panel="toggleRightPanel"
+          />
+          <div class="terminals-container" :style="{ height: terminalContainerHeight }">
+            <TerminalSessionContent
+              v-for="tab in terminalStore.tabs"
+              :key="tab.id"
+              :tab="tab"
+              :is-active="tab.id === terminalStore.activeTabId"
+              :lost-connection="getSessionConnectionStatus(tab.id).lostConnection"
+              @refresh="refreshTerminal"
+            />
+          </div>
+          <TerminalStatusBar />
+        </div>
+
+        <TerminalRightPanel
+          ref="rightPanelRef"
+          :is-visible="terminalStore.llm_panel_visible"
+        />
+      </div>
+    </AConfigProvider>
+  </div>
+</template>
+
+<style lang="less" scoped>
+.terminal-layout {
+  display: flex;
+  height: max(600px, calc(100vh - 200px));
+  border: 1px solid #333;
+  border-radius: 5px;
+  overflow: hidden;
+  background: #000;
+  position: relative;
+  width: 100%;
+
+  @media (max-width: 1024px) {
+    flex-direction: column;
+    height: max(400px, calc(100vh - 160px));
+  }
+
+  @media (max-width: 512px) {
+    border-radius: 0;
+    height: calc(100vh - 180px);
+  }
+}
+
+.terminal-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  transition: all 0.3s ease;
+  background: #000;
+
+  @media (max-width: 1024px) {
+    flex: none;
+    /* Height will be controlled by inline style */
+  }
+
+  @media (max-width: 512px) {
+    /* Height will be controlled by inline style */
+  }
+}
+
+.terminals-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+
+  @media (max-width: 1024px) {
+    min-height: 200px;
+  }
+
+  @media (max-width: 512px) {
+    min-height: 150px;
+  }
+}
+</style>
