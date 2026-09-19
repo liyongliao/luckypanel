@@ -70,8 +70,8 @@ func EnsureInstallSecret() error {
 	// had no way to discover the value that the installation page requires. The
 	// secret is only valid for InstallWindow after startup and is removed once
 	// installation finishes. Fixes #1705.
-	logger.Infof("[Nginx UI] One-time install secret (valid for %s): %s", InstallWindow, secret)
-	logger.Infof("[Nginx UI] Enter it on the installation page. You can also read it with: cat %s", InstallSecretPath())
+	logger.Infof("[LuckyPanel] One-time install secret (valid for %s): %s", InstallWindow, secret)
+	logger.Infof("[LuckyPanel] Enter it on the installation page. You can also read it with: cat %s", InstallSecretPath())
 
 	return nil
 }

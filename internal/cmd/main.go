@@ -14,12 +14,13 @@ func NewAppCmd() *cli.Command {
 	serve := false
 
 	cmd := &cli.Command{
-		Name:  "nginx-ui",
-		Usage: "Yet another Nginx Web UI",
+		Name:  "luckypanel",
+		Usage: "LuckyPanel - All-in-One Server & Network Management Dashboard",
 		Commands: []*cli.Command{
 			{
-				Name:  "serve",
-				Usage: "Start the Nginx-UI server",
+				Name:    "serve",
+				Aliases: []string{"run"},
+				Usage:   "Start the LuckyPanel server",
 				Action: func(ctx context.Context, command *cli.Command) error {
 					serve = true
 					return nil

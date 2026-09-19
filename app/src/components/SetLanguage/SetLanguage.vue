@@ -29,7 +29,7 @@ const languageOptions = computed<SelectProps['options']>(() => Object.entries(la
 function updateTitle() {
   const name = route.meta.name as never as () => string
 
-  document.title = `${name()} | Nginx UI`
+  document.title = `${name()} | LuckyPanel`
 }
 
 watch(current, v => {

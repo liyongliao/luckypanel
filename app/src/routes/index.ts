@@ -93,7 +93,7 @@ const router = createRouter({
 const nprogress = useNProgress()
 
 router.beforeEach(to => {
-  document.title = `${to?.meta.name?.() ?? ''} | Nginx UI`
+  document.title = `${to?.meta.name?.() ?? ''} | LuckyPanel`
 
   nprogress.start()
 
