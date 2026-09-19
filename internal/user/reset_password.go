@@ -12,7 +12,7 @@ import (
 	"github.com/0xJacky/Nginx-UI/settings"
 	"github.com/gin-gonic/gin"
 	"github.com/uozi-tech/cosy"
-	sqlite "github.com/uozi-tech/cosy-driver-sqlite"
+	sqlite "github.com/0xJacky/Nginx-UI/internal/database"
 	"github.com/uozi-tech/cosy/logger"
 	cSettings "github.com/uozi-tech/cosy/settings"
 	"github.com/urfave/cli/v3"

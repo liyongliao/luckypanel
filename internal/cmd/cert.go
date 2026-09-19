@@ -14,7 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-acme/lego/v5/certcrypto"
 	"github.com/uozi-tech/cosy"
-	sqlite "github.com/uozi-tech/cosy-driver-sqlite"
+	sqlite "github.com/0xJacky/Nginx-UI/internal/database"
 	"github.com/uozi-tech/cosy/logger"
 	cSettings "github.com/uozi-tech/cosy/settings"
 	"github.com/urfave/cli/v3"

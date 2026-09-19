@@ -35,7 +35,7 @@ import (
 	"github.com/0xJacky/Nginx-UI/settings"
 	"github.com/google/uuid"
 	"github.com/uozi-tech/cosy"
-	sqlite "github.com/uozi-tech/cosy-driver-sqlite"
+	sqlite "github.com/0xJacky/Nginx-UI/internal/database"
 	"github.com/uozi-tech/cosy/kernel"
 	"github.com/uozi-tech/cosy/logger"
 	cModel "github.com/uozi-tech/cosy/model"
